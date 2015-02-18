@@ -1,0 +1,90 @@
+#!/usr/bin/make -f
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+# These are used for cross-compiling and for saving the configure script
+# from having to guess our platform (since we know it already)
+DEB_HOST_GNU_TYPE   ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+
+ifeq "$(DEB_HOST_GNU_TYPE)" "$(DEB_BUILD_GNU_TYPE)"
+usr_inc = /usr/include
+else
+usr_inc = /usr/$(DEB_HOST_GNU_TYPE)/include
+# XXX Work around configure.in problem with cross build.
+# Note that this is only used in one struct for two fields, and both
+# fields must be 1 anyway.
+bitfield_pack = rpppoe_cv_pack_bitfields=normal
+endif
+
+usr_inc = ../ppp
+
+build: build-stamp
+build-stamp:
+	dh_testdir
+	test -f ../ppp/pppd/patchlevel.h || (echo "You must pull vyatta-ppp package sources before building rp-pppoe !\n" && exit 1)
+	test -f src/configure || (cd src && aclocal; autoconf)
+	test -f src/Makefile || (cd src && PPPD=/usr/sbin/pppd $(bitfield_pack) \
+		./configure \
+			--host=$(DEB_HOST_GNU_TYPE) \
+			--build=$(DEB_BUILD_GNU_TYPE) \
+			--enable-plugin=$(usr_inc))
+	$(MAKE) -C src
+	touch build-stamp
+
+clean:
+	dh_testdir
+	dh_testroot
+	rm -f build-stamp
+	-rm -f pppoe.prj pppoe.log .pppoe.prcs_aux
+	-$(MAKE) -C src distclean
+	-$(MAKE) -C gui distclean
+	rm -f src/pppoe-relay
+	-rm -f debian/substvars.debhelper
+	-rm -f config.h config.log config.status
+	-rm -f Makefile libevent/Makefile
+	dh_clean
+
+# Build architecture-independent files here.
+binary-indep: build
+# We have nothing to do by default.
+
+# Build architecture-dependent files here.
+binary-arch: build
+	dh_testdir
+	dh_testroot
+	dh_clean -k
+	dh_installdirs usr/sbin usr/share
+	$(MAKE) -C src install DESTDIR="`pwd`/debian/pppoe"
+#	Now clean out unwanted things, and move others to their places
+	rm -rf debian/pppoe/etc/ppp debian/pppoe/usr/doc
+	rm -rf debian/pppoe/usr/man/man5  # pppoe.conf manpage
+	rm -f debian/pppoe/usr/sbin/adsl-* debian/pppoe/usr/man/man8/adsl-*
+	dh_installdirs etc/ppp/peers
+#	mv debian/pppoe/usr/man debian/pppoe/usr/share/man
+	install -m 0640 -o root -g dip debian/dsl-provider \
+		debian/pppoe/etc/ppp/peers/dsl-provider
+	dh_installdocs
+	dh_installexamples
+#	dh_installmanpages
+	dh_installchangelogs doc/CHANGES
+	dh_link
+	dh_strip
+	dh_compress
+#	dh_fixperms
+	chgrp dip debian/pppoe/usr/sbin/pppoe
+	chmod u+s debian/pppoe/usr/sbin/pppoe
+	chmod o-x debian/pppoe/usr/sbin/pppoe
+	dh_installdeb
+	dh_shlibdeps
+	if [ -f "../.VYATTA_DEV_BUILD" ]; then \
+                dh_gencontrol -- -v999.dev; \
+        else \
+                dh_gencontrol; \
+	fi
+	dh_md5sums
+	dh_builddeb
+
+binary: binary-indep binary-arch
+.PHONY: build clean binary-indep binary-arch binary install

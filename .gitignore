@@ -1,0 +1,8 @@
+*.o
+*.so
+*.a
+build-stamp
+configure-stamp
+debian/files
+debian/pppoe
+debian/pppoe.debhelper.log
