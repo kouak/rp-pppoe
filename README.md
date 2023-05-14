@@ -1,3 +1,6 @@
+# This repository is archived : https://github.com/dfskoll/rp-pppoe
+
+
 # LIC: GPL
 
 pppoe: a PPP-over-Ethernet redirector for pppd
